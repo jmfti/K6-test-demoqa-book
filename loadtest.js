@@ -3,6 +3,25 @@
 import { sleep, group } from 'k6'
 import http from 'k6/http'
 import { SharedArray } from 'k6/data';
+import { htmlReport } from "https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js";
+import { Trend } from 'k6/metrics';
+import { textSummary } from "https://jslib.k6.io/k6-summary/0.0.1/index.js";
+
+export function handleSummary(data) {
+  return {
+    "result.html": htmlReport(data),
+    stdout: textSummary(data, { indent: " ", enableColors: true }),
+  };
+}
+
+const generateTokenTrend = new Trend('GenerateToken');
+const getUsersTrend = new Trend('GetUsers');
+const loginTrend = new Trend('Login');
+const userProfileTrend = new Trend('UserProfile');
+const listBooksTrend = new Trend('ListBooks');
+const getBookInfoTrend = new Trend('GetBookInfo');
+const addBookTrend = new Trend('AddBook');
+
 
 
 // define the scenario we are running. a ramping-vus that will load users in a linear fashion, a stable stage and a step rampdown
@@ -12,24 +31,27 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '1m', target: __ENV.TARGET },
-        { duration: '2m', target: 0 },
+        { duration: '10s', target: __ENV.TARGET },
+        { duration: '20s', target: 0 },
         { duration: '1s', target: 0 },
       ],
     },
   },
 }
 
+
 // get configuration properties
 const profile = new SharedArray("profile", function(){
-  return [JSON.parse(open("./config/profiles.json"))[__ENV.profile]];
+  let profiles = {
+      "dev": {
+          "user": "Test_jmfti01",
+          "pwd": "Test_jmfti01!:" // this should be obviously secretized
+      }
+  }
+
+  return [profiles[__ENV.profile]];
 })
 
-// var profiles = open("./config/profiles.json");
-// var profile = profiles[__ENV.profile];
-// console.log(profile)
-// console.log(profile);
-// load json from file
 
 export default function main() {
   // we will need books sessionData to get token and other things. Cookie is built with the sessionData
@@ -39,7 +61,7 @@ export default function main() {
     // a group for the GenerateToken request
     group('GenerateToken - https://demoqa.com/Account/v1/GenerateToken', function () {
       response = http.post(
-        'https://demoqa.com/Account/v1/GenerateToken',
+        'https://demoqa.com/Account/v1/GenerateToken',  // endpoints should be get from the config file, to make simple ${endpoint}/GenerateToken
         `{"userName":"${profile[0].user}","password":"${profile[0].pwd}"}`,
         {
           headers: {
@@ -60,8 +82,10 @@ export default function main() {
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
           },
+          tags: { name: 'GenerateToken' },
         }
       )
+      generateTokenTrend.add(response.timings.duration);  // add response times statistics grouped by method
     }); // end GenerateToken
     // login step
     group('LoginStep - https://demoqa.com/Account/v1/Login', function () {
@@ -87,8 +111,10 @@ export default function main() {
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
           },
+          tags: { name: 'Login' },
         }
       )
+      loginTrend.add(response.timings.duration);
     }); // end Login
     // recover sessionData from response and build the cookie we need
     sessionData = response.json();
@@ -108,7 +134,7 @@ export default function main() {
           Cookie:
             cookie,
           Host: 'demoqa.com',
-          // 'If-None-Match': 'W/"4e2-twitz3/ySt6fBW+wRvr4H7ojC4c"',
+          // 'If-None-Match': 'W/"4e2-twitz3/ySt6fBW+wRvr4H7ojC4c"',  
           Referer: 'https://demoqa.com/profile',
           'Sec-Fetch-Dest': 'empty',
           'Sec-Fetch-Mode': 'cors',
@@ -119,7 +145,9 @@ export default function main() {
           'sec-ch-ua-mobile': '?0',
           'sec-ch-ua-platform': '"Windows"',
         },
+        tags: { name: 'UserProfile' },
       })
+      userProfileTrend.add(response.timings.duration);
     }); // end UserProfile
   }); // end Login
   // a transaction for listing books
@@ -144,8 +172,9 @@ export default function main() {
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"',
       },
+      tags: { name: 'ListBooks' },
     });
-    
+    listBooksTrend.add(response.timings.duration);
     // get the list of books to be used in the next transaction
     books = response.json().books;
 
@@ -157,30 +186,7 @@ export default function main() {
     if (Math.random() >= 0.5) {
       return;
     }
-    // I don't know what is this request for but doesn't seem to be needed
-    // response = http.get('https://demoqa.com/books?book=${randomBook.isbn}`, {
-    //   headers: {
-    //     Accept:
-    //       'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-    //     'Accept-Encoding': 'gzip, deflate, br',
-    //     'Accept-Language': 'es-ES,es;q=0.9',
-    //     Connection: 'keep-alive',
-    //     Cookie:
-    //       cookie,
-    //     Host: 'demoqa.com',
-    //     Referer: 'https://demoqa.com/books',
-    //     'Sec-Fetch-Dest': 'document',
-    //     'Sec-Fetch-Mode': 'navigate',
-    //     'Sec-Fetch-Site': 'same-origin',
-    //     'Sec-Fetch-User': '?1',
-    //     'Upgrade-Insecure-Requests': '1',
-    //     'User-Agent':
-    //       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36',
-    //     'sec-ch-ua': '"Google Chrome";v="105", "Not)A;Brand";v="8", "Chromium";v="105"',
-    //     'sec-ch-ua-mobile': '?0',
-    //     'sec-ch-ua-platform': '"Windows"',
-    //   },
-    // })
+    
 
     // get a random book and add it to the cart
     let randomBook = books[parseInt(Math.random() * books.length)];
@@ -206,7 +212,9 @@ export default function main() {
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"',
       },
+      tags: { name: 'GetBookInfo' },
     })
+    getBookInfoTrend.add(response.timings.duration);
     }); // end get book info
   
     // add the book to the cart
@@ -237,8 +245,10 @@ export default function main() {
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
           },
+          tags: { name: 'add_book_to_cart' },
         }
       )
+      addBookToCartTrend.add(response.timings.duration);
     }); // end add book to cart
   })  // end add random book
   // proceed to get to our cart and remove any element we have
@@ -268,7 +278,9 @@ export default function main() {
           'sec-ch-ua-mobile': '?0',
           'sec-ch-ua-platform': '"Windows"',
         },
+        tags: { name: 'UserProfile' },
       })
+      userProfileTrend.add(response.timings.duration);
     }); // end get user profile
     if (!response.body.match(/.+/)){
       // if there aren't any books in cart just pass
@@ -306,12 +318,14 @@ export default function main() {
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
           },
+          tags: { name: 'delete_book' },
         }
       )
+      deleteBookTrend.add(response.timings.duration);
     }
 
     
 
   }); // end delete all books
-  sleep(60) // sleep for 60 seconds, so 1 vuser will be 1 req/min
+  sleep(1) // sleep for 60 seconds, so 1 vuser will be 1 req/min
 }
