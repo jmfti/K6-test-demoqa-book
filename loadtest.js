@@ -21,6 +21,7 @@ const userProfileTrend = new Trend('UserProfile');
 const listBooksTrend = new Trend('ListBooks');
 const getBookInfoTrend = new Trend('GetBookInfo');
 const addBookTrend = new Trend('AddBook');
+const deleteBookTrend = new Trend('DeleteBook');
 
 
 
@@ -248,7 +249,7 @@ export default function main() {
           tags: { name: 'add_book_to_cart' },
         }
       )
-      addBookToCartTrend.add(response.timings.duration);
+      addBookTrend.add(response.timings.duration);
     }); // end add book to cart
   })  // end add random book
   // proceed to get to our cart and remove any element we have
