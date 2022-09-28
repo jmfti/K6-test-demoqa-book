@@ -22,6 +22,9 @@ Just clone git repository, execute run_test.sh, enjoy
 run_test.sh creates if does not exist the paths ./output, ./input
 executes the test run in a docker container and drop the csv in the output directory
 
+UPDATE: now a target must be specified to make a dynamic scenario. Just make bash run_test.sh <target>, example: 
+bash run_test.sh 10
+
 after the test run a report is generated with an R script in markdown, in ./reporting/report.html
 in order to work it needs the results in the output directory, more precisely, the result_current_run.csv and baseline.csv
 
@@ -39,3 +42,13 @@ bash run_test.sh 100
 ### Things I should change but I won't because it's a PoC
 * Endpoint by configuration. All the endpoints are hardcoded in the script. I should move them to the json profiles configuration
 * probably some others that doesn't come right now to my mind
+
+# Imporant things
+
+Once you clone the repository make sure git doesn't replace crlf's
+
+git clone <repository> <path>
+cd <path>
+git config core.autocrlf false
+git reset --hard
+bash run_test.sh <target>
